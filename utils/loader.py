@@ -37,6 +37,7 @@ MAPA_NUEVO = {
     "Razon social cliente factura":  "Nombre_Cliente",
     "Sucursal factura":              "Sucursal",
     "Lista de precios":              "Lista_Precios",
+    "Desc. lista de precios":        "Desc_Lista_Precios",
     "CATEGORIA":                     "Categoria",
     "CLASES DE CLIENTES":            "Clase_Cliente",
     "Tipo docto.":                   "Tipo_Doc",
@@ -132,14 +133,6 @@ def _normalizar(df, formato):
     mapa_activo = {k: v for k, v in mapa.items() if k in df.columns}
     df = df.rename(columns=mapa_activo)
 
-    # Convertir columnas numéricas clave ANTES de operar con ellas
-    for col in ["Valor_Neto", "Costo_Total", "Valor_Rentabilidad"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(
-                df[col].astype(str).str.replace(",", "", regex=False),
-                errors="coerce"
-            ).fillna(0)
-
     # Rentabilidad calculada si no viene directa
     if "Valor_Rentabilidad" not in df.columns:
         if "Valor_Neto" in df.columns and "Costo_Total" in df.columns:
@@ -187,7 +180,7 @@ def cargar_data():
         if not os.path.exists(ruta):
             continue
         if nombre.endswith(".csv"):
-            df = _leer_csv_robusto(ruta)
+            df = pd.read_csv(ruta, encoding="utf-8", low_memory=False)
         else:
             df = pd.read_excel(ruta)
         formato = _detectar_formato(df.columns.tolist())
@@ -196,40 +189,18 @@ def cargar_data():
         return df
     return pd.DataFrame()
 
-def _leer_csv_robusto(ruta):
-    """
-    Lee el CSV tolerando:
-    - Filas con campos de más (on_bad_lines='skip')
-    - Distintas codificaciones (utf-8, latin-1, cp1252)
-    - Separadores ; o ,
-    """
-    encodings = ["utf-8", "latin-1", "cp1252"]
-    for enc in encodings:
-        try:
-            # Intentar detectar separador leyendo primera línea
-            with open(ruta, "r", encoding=enc, errors="replace") as f:
-                primera = f.readline()
-            sep = ";" if primera.count(";") > primera.count(",") else ","
-
-            df = pd.read_csv(
-                ruta,
-                encoding=enc,
-                sep=sep,
-                low_memory=False,
-                on_bad_lines="skip",   # Omite filas con campos de más
-                engine="python",       # Motor más tolerante
-            )
-            return df
-        except Exception:
-            continue
-    # Último recurso: forzar con engine C y skip
-    return pd.read_csv(ruta, encoding="latin-1", on_bad_lines="skip", low_memory=False)
-
 def formatear_millones(valor):
+    """
+    Formato colombiano de pesos:
+      >= 1,000M  →  $X,XXXmm  (miles de millones, 'mm' = miles de millones)
+      >= 1M      →  $X.Xm     (millones)
+      < 1M       →  $X,XXX
+    NUNCA usa 'B' porque en español 'billón' = 1,000,000 millones.
+    """
     if abs(valor) >= 1_000_000_000:
-        return f"${valor/1_000_000_000:,.2f}B"
+        return f"${valor/1_000_000_000:,.2f}mm"   # miles de millones
     if abs(valor) >= 1_000_000:
-        return f"${valor/1_000_000:,.1f}M"
+        return f"${valor/1_000_000:,.1f}M"         # millones
     return f"${valor:,.0f}"
 
 def formatear_pct(valor):
