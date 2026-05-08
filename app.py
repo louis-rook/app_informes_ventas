@@ -2,9 +2,13 @@
 app.py — Página principal y cargador de archivos
 Ejecutar con: streamlit run app.py
 """
-import streamlit as st
+import io
+import os
+import sys
+
 import pandas as pd
-import os, sys
+import streamlit as st
+
 sys.path.insert(0, os.path.dirname(__file__))
 from utils.loader import cargar_data, DATA_FOLDER
 
@@ -43,14 +47,17 @@ with st.sidebar:
             destino = os.path.join(DATA_FOLDER, "data.csv")
             with open(destino, "wb") as f:
                 f.write(archivo.getbuffer())
-            st.success(f"✅ CSV cargado correctamente")
+            st.success("✅ CSV cargado correctamente")
         else:
-            # Excel: leer la hoja Sheet1 o DATA y guardar como CSV
+            # ✅ CORRECCIÓN: envolver en BytesIO para que openpyxl pueda
+            # hacer seek correctamente sobre el buffer de Streamlit
             try:
+                buffer = io.BytesIO(archivo.getbuffer())
                 try:
-                    df_raw = pd.read_excel(archivo, sheet_name="Sheet1", engine="openpyxl")
+                    df_raw = pd.read_excel(buffer, sheet_name="Sheet1", engine="openpyxl")
                 except Exception:
-                    df_raw = pd.read_excel(archivo, sheet_name="DATA", engine="openpyxl")
+                    buffer.seek(0)  # resetear puntero antes del segundo intento
+                    df_raw = pd.read_excel(buffer, sheet_name="DATA", engine="openpyxl")
 
                 destino = os.path.join(DATA_FOLDER, "data.csv")
                 df_raw.to_csv(destino, index=False, encoding="utf-8")
@@ -93,29 +100,35 @@ rent  = df["Valor_Rentabilidad"].sum() if "Valor_Rentabilidad" in df.columns els
 filas = len(df)
 
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("💰 Ventas Netas",   f"${venta/1e6:,.1f}M" if venta >= 1e6 else f"${venta:,.0f}")
-k2.metric("🏭 Costo Total",    f"${costo/1e6:,.1f}M" if costo >= 1e6 else f"${costo:,.0f}")
-k3.metric("📈 Rentabilidad",   f"${rent/1e6:,.1f}M"  if rent  >= 1e6 else f"${rent:,.0f}",
+k1.metric("💰 Ventas Netas",  f"${venta/1e6:,.1f}M" if venta >= 1e6 else f"${venta:,.0f}")
+k2.metric("🏭 Costo Total",   f"${costo/1e6:,.1f}M" if costo >= 1e6 else f"${costo:,.0f}")
+k3.metric("📈 Rentabilidad",  f"${rent/1e6:,.1f}M"  if rent  >= 1e6 else f"${rent:,.0f}",
           delta=f"{rent/venta*100:.1f}%" if venta else None)
-k4.metric("📋 Transacciones",  f"{filas:,}")
+k4.metric("📋 Transacciones", f"{filas:,}")
 
 st.divider()
 
-# Mini resumen por canal
+# ── Mini resumen por canal ─────────────────────────────────────────────────
 if "Canal" in df.columns:
     st.markdown("#### Vista rápida por canal")
     resumen = (
         df.groupby("Canal")
-        .agg(Ventas=("Valor_Neto","sum"), Unidades=("Cantidad","sum"),
-             Rentabilidad=("Valor_Rentabilidad","sum"))
+        .agg(
+            Ventas=("Valor_Neto", "sum"),
+            Unidades=("Cantidad", "sum"),
+            Rentabilidad=("Valor_Rentabilidad", "sum"),
+        )
         .reset_index()
     )
-    resumen["%Rent"] = resumen["Rentabilidad"] / resumen["Ventas"].replace(0,1)
+    resumen["%Rent"] = resumen["Rentabilidad"] / resumen["Ventas"].replace(0, 1)
     resumen = resumen.sort_values("Ventas", ascending=False)
     st.dataframe(
         resumen.style.format({
-            "Ventas":"{:,.0f}","Unidades":"{:,.0f}",
-            "Rentabilidad":"{:,.0f}","%Rent":"{:.2%}"
+            "Ventas": "{:,.0f}",
+            "Unidades": "{:,.0f}",
+            "Rentabilidad": "{:,.0f}",
+            "%Rent": "{:.2%}",
         }),
-        use_container_width=True, hide_index=True
+        use_container_width=True,
+        hide_index=True,
     )

@@ -5,6 +5,7 @@ Consulta libre por cliente o por ítem.
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from utils.loader import cargar_data, formatear_millones
@@ -92,17 +93,61 @@ if modo == "Por Cliente":
             st.dataframe(tbl.style.format({
                 "Cantidad":"{:,.0f}","Valor_Neto":"{:,.0f}",
                 "Costo_Total":"{:,.0f}","Rentabilidad":"{:,.0f}","%Rent":"{:.2%}"
-            }), use_container_width=True, hide_index=True)
+            }),
+            column_config={
+                "%Rent": st.column_config.NumberColumn("%Rent", help="(Ventas - Costo) / Ventas × 100"),
+            },
+            use_container_width=True, hide_index=True)
 
         if "Fecha" in dff.columns and dff["Fecha"].notna().any():
             serie = dff.groupby(dff["Fecha"].dt.date)["Valor_Neto"].sum().reset_index()
             serie.columns = ["Fecha", "Ventas"]
-            fig = px.area(serie, x="Fecha", y="Ventas",
-                          labels={"Ventas": "Ventas Netas ($)"},
-                          color_discrete_sequence=["#3b82f6"],
-                          title="Evolución de ventas")
-            fig.update_layout(plot_bgcolor="white")
-            st.plotly_chart(fig, use_container_width=True)
+            n_fechas = len(serie)
+
+            if n_fechas == 1:
+                # Un solo día: mostrar desglose por canal o por ítem
+                st.markdown("#### 📋 Compras del día")
+                if "Canal" in dff.columns:
+                    pc = dff.groupby("Canal")["Valor_Neto"].sum().reset_index()
+                    pc.columns = ["Canal de Ventas", "Ventas ($)"]
+                    pc = pc.sort_values("Ventas ($)", ascending=True)
+                    fig = px.bar(pc, x="Ventas ($)", y="Canal de Ventas", orientation="h",
+                                 text_auto=".3s",
+                                 color="Ventas ($)",
+                                 color_continuous_scale=[[0,"#93c5fd"],[1,"#1d4ed8"]],
+                                 labels={"Ventas ($)": "Ventas Netas ($)", "Canal de Ventas": ""},
+                                 title=f"Ventas del {serie['Fecha'].iloc[0]} por canal")
+                    fig.update_layout(coloraxis_showscale=False, plot_bgcolor="white", height=300)
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info(f"Una sola fecha registrada: {serie['Fecha'].iloc[0]}  •  Ventas: ${serie['Ventas'].iloc[0]:,.0f}")
+            else:
+                # Múltiples fechas: línea con puntos + línea de tendencia
+                st.markdown("#### 📈 Evolución de ventas")
+                st.caption("Línea azul = ventas reales por fecha  •  Línea naranja punteada = Tendencia MM3 (promedio móvil de 3 períodos: suaviza los altos y bajos para mostrar la dirección general de las ventas)")
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=serie["Fecha"], y=serie["Ventas"],
+                    name="Ventas ($)",
+                    mode="lines+markers",
+                    line=dict(color="#3b82f6", width=2),
+                    marker=dict(size=8, color="#3b82f6"),
+                ))
+                if n_fechas >= 4:
+                    mm = serie["Ventas"].rolling(3, center=True).mean()
+                    fig.add_trace(go.Scatter(
+                        x=serie["Fecha"], y=mm,
+                        name="Tendencia (MM3)",
+                        mode="lines",
+                        line=dict(color="#f59e0b", width=2, dash="dot"),
+                    ))
+                fig.update_layout(
+                    plot_bgcolor="white", height=350,
+                    yaxis=dict(title="Ventas Netas ($)", showgrid=True, gridcolor="#e2e8f0"),
+                    legend=dict(orientation="h", y=-0.2),
+                    margin=dict(t=20, b=60),
+                )
+                st.plotly_chart(fig, use_container_width=True)
 
         st.download_button("📥 Descargar detalle completo",
                            data=dff.to_csv(index=False, encoding="utf-8-sig"),

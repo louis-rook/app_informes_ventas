@@ -1,7 +1,7 @@
 """
 pages/5_🥛_Volumenes.py
 Análisis de volúmenes de producción:
-  • Sueros → Toneladas por canal y por día
+  • Sueros → Litros por canal y por día
   • Leches → Litros por canal, tipo de leche y por día
 """
 import streamlit as st
@@ -11,7 +11,10 @@ import plotly.graph_objects as go
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from utils.loader import cargar_data
-from utils.params import TIPO_LECHE, MOTIVOS_OBSEQUIO
+from utils.params import (TIPO_LECHE, MOTIVOS_OBSEQUIO,
+                          FAMILIAS_SUERO, FAMILIAS_LECHE, FAMILIA_MAQUILA,
+                          CANALES_DYV, CANALES_PAE, CANALES_SMK_TD,
+                          ML_POR_REFERENCIA_SUERO)
 
 st.set_page_config(page_title="Volúmenes", page_icon="🥛", layout="wide")
 
@@ -44,10 +47,6 @@ def dias_periodo(df):
         return 1
     return max(1, (df["Fecha"].max() - df["Fecha"].min()).days + 1)
 
-def fmt_ton(v):
-    if pd.isna(v): return "—"
-    return f"{v:,.2f}"
-
 def fmt_lit(v):
     if pd.isna(v): return "—"
     if abs(v) >= 1_000_000: return f"{v/1_000_000:,.2f}M"
@@ -69,7 +68,7 @@ with st.sidebar:
 
     if CANAL_COL in df_all.columns:
         canales = ["Todos"] + sorted(df_all[CANAL_COL].dropna().unique().tolist())
-        canal_sel = st.selectbox("Canal", canales)
+        canal_sel = st.selectbox("Canal de Ventas", canales)
     else:
         canal_sel = "Todos"
 
@@ -86,35 +85,48 @@ DIAS = dias_periodo(df)
 
 # ── Título ─────────────────────────────────────────────────────────────────
 st.title("🥛 Volúmenes de Producción")
-st.caption(f"Motivo: **{tipo_motivo}**  •  Canal: **{canal_sel}**  •  Días del período: **{DIAS}**")
+st.caption(f"Motivo: **{tipo_motivo}**  •  Canal de Ventas: **{canal_sel}**  •  Días del período: **{DIAS}**")
 
 if df.empty:
     st.info("No hay datos para los filtros seleccionados.")
     st.stop()
 
 # ══════════════════════════════════════════════════════════════════════════
-tab_sueros, tab_leches = st.tabs(["🧴 Sueros (Toneladas)", "🥛 Leches (Litros)"])
+tab_sueros, tab_leches = st.tabs(["🧴 Sueros (Litros)", "🥛 Leches (Litros)"])
 
 # ══════════════════════════════════════════════════════════════════════════
 # TAB SUEROS
 # ══════════════════════════════════════════════════════════════════════════
 with tab_sueros:
 
-    FAMILIAS_SUERO = ["Sueros", "Maquila Suero"]
     df_s = df[df["Familia"].isin(FAMILIAS_SUERO)] if "Familia" in df.columns else pd.DataFrame()
+
+    # El sistema no registra litros para sueros: se calculan desde Cantidad × ml/unidad
+    if not df_s.empty and "Referencia" in df_s.columns:
+        df_s = df_s.copy()
+        ref = df_s["Referencia"].astype(str).str.strip()
+        um  = df_s["UM"].astype(str).str.strip() if "UM" in df_s.columns else pd.Series("UND", index=df_s.index)
+        ml_unit = ref.map(ML_POR_REFERENCIA_SUERO).fillna(0)
+        df_s["Litros"] = (
+            (df_s["Cantidad"] * ml_unit / 1000).where(um != "KG", 0) +
+            df_s["Cantidad"].where(um == "KG", 0)
+        )
 
     if df_s.empty:
         st.info("No hay datos de Sueros para los filtros actuales.")
     else:
         # KPIs sueros
-        ton_total  = df_s["Litros"].sum() / 1000 if "Litros" in df_s.columns else 0
-        cant_total = df_s["Cantidad"].sum()       if "Cantidad" in df_s.columns else 0
-        ton_dia    = ton_total / DIAS
+        lit_total_s = df_s["Litros"].sum() if "Litros" in df_s.columns else 0
+        cant_total  = df_s["Cantidad"].sum() if "Cantidad" in df_s.columns else 0
+        lit_dia_s   = lit_total_s / DIAS
 
         k1, k2, k3 = st.columns(3)
-        k1.metric("📦 Unidades totales",   f"{cant_total:,.0f}")
-        k2.metric("⚖️ Toneladas totales",  f"{ton_total:,.2f} T")
-        k3.metric("📅 Toneladas por día",  f"{ton_dia:,.2f} T/día")
+        k1.metric("📦 Unidades totales",  f"{cant_total:,.0f}",
+                  help="Número total de unidades vendidas")
+        k2.metric("🧴 Litros totales",    f"{lit_total_s:,.1f} L",
+                  help="Volumen total de sueros en litros del período")
+        k3.metric("📅 Litros por día",    f"{lit_dia_s:,.1f} L/día",
+                  help="Promedio de litros vendidos por día del período")
 
         st.divider()
 
@@ -123,90 +135,96 @@ with tab_sueros:
             if df_fam.empty:
                 continue
 
-            ton_fam = df_fam["Litros"].sum() / 1000 if "Litros" in df_fam.columns else 0
-            st.subheader(f"🧴 {familia}  —  {ton_fam:,.2f} T")
-
-            col_tabla, col_cal = st.columns([1, 2])
+            lit_fam = df_fam["Litros"].sum() if "Litros" in df_fam.columns else 0
+            st.subheader(f"🧴 {familia}  —  {lit_fam:,.1f} L")
 
             # ── Tabla por canal ──────────────────────────────────────────
-            with col_tabla:
-                st.markdown("**Por Canal**")
-                if CANAL_COL in df_fam.columns:
-                    agg = df_fam.groupby(CANAL_COL).agg(
-                        Cantidad =("Cantidad", "sum"),
-                        Litros   =("Litros",   "sum"),
-                    ).reset_index()
-                    agg["Toneladas"]  = agg["Litros"] / 1000
-                    agg["%_Part"]     = agg["Toneladas"] / ton_fam * 100 if ton_fam else 0
-                    agg["T_x_Dia"]    = agg["Toneladas"] / DIAS
-                    agg = agg.sort_values("Toneladas", ascending=False)
+            st.markdown("**Por Canal de Ventas**")
+            if CANAL_COL in df_fam.columns:
+                agg = df_fam.groupby(CANAL_COL).agg(
+                    Cantidad =("Cantidad", "sum"),
+                    Litros   =("Litros",   "sum"),
+                ).reset_index()
+                agg["%_Part"]  = agg["Litros"] / lit_fam * 100 if lit_fam else 0
+                agg["L_x_Dia"] = agg["Litros"] / DIAS
+                agg = agg.sort_values("Litros", ascending=False)
 
-                    # Fila total
-                    tot = pd.DataFrame([{
-                        CANAL_COL:   "TOTAL",
-                        "Cantidad":  agg["Cantidad"].sum(),
-                        "Toneladas": agg["Toneladas"].sum(),
-                        "%_Part":    100.0,
-                        "T_x_Dia":   agg["Toneladas"].sum() / DIAS,
-                    }])
-                    tabla_s = pd.concat([agg[[CANAL_COL,"Cantidad","Toneladas","%_Part","T_x_Dia"]],
-                                         tot[[CANAL_COL,"Cantidad","Toneladas","%_Part","T_x_Dia"]]],
-                                        ignore_index=True)
+                tot = pd.DataFrame([{
+                    CANAL_COL:  "TOTAL",
+                    "Cantidad": agg["Cantidad"].sum(),
+                    "Litros":   agg["Litros"].sum(),
+                    "%_Part":   100.0,
+                    "L_x_Dia":  agg["Litros"].sum() / DIAS,
+                }])
+                tabla_s = pd.concat([agg[[CANAL_COL,"Cantidad","Litros","%_Part","L_x_Dia"]],
+                                     tot[[CANAL_COL,"Cantidad","Litros","%_Part","L_x_Dia"]]],
+                                    ignore_index=True)
 
-                    def style_total_s(row):
-                        if row[CANAL_COL] == "TOTAL":
-                            return ["background:#1e3a5f;color:white;font-weight:bold"] * len(row)
-                        return [""] * len(row)
+                def style_total_s(row):
+                    if row.iloc[0] == "TOTAL":
+                        return ["background:#1e3a5f;color:white;font-weight:bold"] * len(row)
+                    return [""] * len(row)
 
-                    st.dataframe(
-                        tabla_s.rename(columns={
-                            CANAL_COL: "Canal",
-                            "Cantidad": "Cantidad",
-                            "Toneladas": "Toneladas (T)",
-                            "%_Part": "% Part.",
-                            "T_x_Dia": "T/Día",
-                        }).style
-                        .format({
-                            "Cantidad":      "{:,.0f}",
-                            "Toneladas (T)": "{:,.2f}",
-                            "% Part.":       "{:.1f}%",
-                            "T/Día":         "{:,.2f}",
-                        })
-                        .apply(style_total_s, axis=1),
-                        use_container_width=True, hide_index=True, height=300
+                tabla_s_disp = tabla_s.rename(columns={
+                    CANAL_COL: "Canal de Ventas",
+                    "Litros":  "Litros (L)",
+                    "%_Part":  "% Part.",
+                    "L_x_Dia": "L/Día",
+                })
+                st.dataframe(
+                    tabla_s_disp.style.apply(style_total_s, axis=1),
+                    column_config={
+                        "Canal de Ventas": st.column_config.TextColumn("Canal de Ventas"),
+                        "Cantidad":   st.column_config.NumberColumn("Cantidad",   format="%,.0f"),
+                        "Litros (L)": st.column_config.NumberColumn("Litros (L)", format="%,.1f"),
+                        "% Part.":    st.column_config.ProgressColumn("% Part.",
+                                        min_value=0, max_value=100, format="%.1f%%",
+                                        help="Participación porcentual del canal sobre el total de litros"),
+                        "L/Día":      st.column_config.NumberColumn("L/Día", format="%,.1f",
+                                        help="Litros promedio despachados por día del período"),
+                    },
+                    use_container_width=True, hide_index=True,
+                )
+
+            # ── Gráfica evolución por canal ──────────────────────────────
+            if "Fecha" in df_fam.columns and CANAL_COL in df_fam.columns:
+                agrupar_semana = DIAS > 14
+                if agrupar_semana:
+                    df_fam2 = df_fam.copy()
+                    df_fam2["_periodo"] = df_fam2["Fecha"].dt.to_period("W").dt.start_time.dt.strftime("%d-%b")
+                    label_eje = "Semana (inicio)"
+                else:
+                    df_fam2 = df_fam.copy()
+                    df_fam2["_periodo"] = df_fam2["Fecha"].dt.strftime("%d-%b")
+                    label_eje = "Día"
+
+                serie_c = df_fam2.groupby([CANAL_COL, "_periodo"])["Litros"].sum().reset_index()
+                serie_c.columns = ["Canal de Ventas", label_eje, "Litros (L)"]
+
+                n_canales_s = serie_c["Canal de Ventas"].nunique()
+                caption_txt = "Por semana (período > 14 días)" if agrupar_semana else "Por día"
+                st.markdown(f"**Litros por Canal de Ventas — {caption_txt}**")
+
+                if n_canales_s == 1:
+                    fig_heat = px.bar(
+                        serie_c, x=label_eje, y="Litros (L)",
+                        color="Litros (L)",
+                        color_continuous_scale=[[0,"#93c5fd"],[1,"#1d4ed8"]],
+                        text_auto=".0f",
                     )
-
-            # ── Calendario diario ────────────────────────────────────────
-            with col_cal:
-                st.markdown("**Toneladas por Canal y Día**")
-                if "Fecha" in df_fam.columns and CANAL_COL in df_fam.columns:
-                    pivot = df_fam.groupby([CANAL_COL, df_fam["Fecha"].dt.strftime("%Y%m%d")])["Litros"] \
-                                  .sum().reset_index()
-                    pivot.columns = [CANAL_COL, "Fecha", "Litros"]
-                    pivot["Toneladas"] = pivot["Litros"] / 1000
-                    pivot_wide = pivot.pivot_table(index=CANAL_COL, columns="Fecha",
-                                                   values="Toneladas", aggfunc="sum").fillna(0)
-
-                    # Total por día
-                    pivot_wide.loc["Total general"] = pivot_wide.sum()
-
-                    # Heatmap
-                    fig_heat = px.imshow(
-                        pivot_wide,
-                        color_continuous_scale="Blues",
-                        aspect="auto",
-                        text_auto=".2f",
-                        labels=dict(x="Fecha", y="Canal", color="Toneladas"),
+                    fig_heat.update_layout(coloraxis_showscale=False,
+                                           plot_bgcolor="white", height=300,
+                                           xaxis=dict(tickangle=-45))
+                else:
+                    fig_heat = px.line(
+                        serie_c, x=label_eje, y="Litros (L)",
+                        color="Canal de Ventas",
+                        markers=True,
                     )
-                    fig_heat.update_layout(
-                        height=max(280, len(pivot_wide) * 45),
-                        margin=dict(l=10, r=10, t=10, b=60),
-                        coloraxis_showscale=False,
-                        xaxis=dict(tickangle=-45, tickfont=dict(size=9)),
-                        yaxis=dict(tickfont=dict(size=11)),
-                    )
-                    fig_heat.update_traces(textfont_size=9)
-                    st.plotly_chart(fig_heat, use_container_width=True)
+                    fig_heat.update_layout(plot_bgcolor="white", height=350,
+                                           xaxis=dict(tickangle=-45),
+                                           legend=dict(orientation="h", y=-0.3))
+                st.plotly_chart(fig_heat, use_container_width=True)
 
             st.divider()
 
@@ -215,7 +233,6 @@ with tab_sueros:
 # ══════════════════════════════════════════════════════════════════════════
 with tab_leches:
 
-    FAMILIAS_LECHE = ["Leches", "Maquila Leche"]
     df_l = df[df["Familia"].isin(FAMILIAS_LECHE)] if "Familia" in df.columns else pd.DataFrame()
 
     if df_l.empty:
@@ -226,9 +243,12 @@ with tab_leches:
         lit_dia    = lit_total / DIAS
 
         k1, k2, k3 = st.columns(3)
-        k1.metric("📦 Unidades totales", f"{cant_total:,.0f}")
-        k2.metric("🥛 Litros totales",   f"{lit_total:,.1f} L")
-        k3.metric("📅 Litros por día",   f"{lit_dia:,.1f} L/día")
+        k1.metric("📦 Unidades totales", f"{cant_total:,.0f}",
+                  help="Número total de unidades vendidas")
+        k2.metric("🥛 Litros totales",   f"{lit_total:,.1f} L",
+                  help="Volumen total vendido en litros")
+        k3.metric("📅 Litros por día",   f"{lit_dia:,.1f} L/día",
+                  help="Promedio de litros vendidos por día del período")
 
         st.divider()
 
@@ -236,7 +256,7 @@ with tab_leches:
         col_canal, col_tipo = st.columns([1, 1])
 
         with col_canal:
-            st.subheader("📋 Por Canal")
+            st.subheader("📋 Por Canal de Ventas")
             if CANAL_COL in df_l.columns:
                 agg_l = df_l.groupby(CANAL_COL).agg(
                     Cantidad =("Cantidad", "sum"),
@@ -247,41 +267,55 @@ with tab_leches:
                 agg_l = agg_l.sort_values("Litros", ascending=False)
 
                 tot_l = pd.DataFrame([{
-                    CANAL_COL:  "TOTAL",
+                    CANAL_COL: "TOTAL",
                     "Cantidad": agg_l["Cantidad"].sum(),
                     "Litros":   agg_l["Litros"].sum(),
                     "%_Part":   100.0,
                     "L_x_Dia":  agg_l["Litros"].sum() / DIAS,
                 }])
-                tabla_l = pd.concat([agg_l, tot_l], ignore_index=True)
+                tabla_l = pd.concat([agg_l, tot_l], ignore_index=True).rename(columns={
+                    CANAL_COL: "Canal de Ventas",
+                    "Litros":  "Litros (L)",
+                    "%_Part":  "% Part.",
+                    "L_x_Dia": "L/Día",
+                })
 
                 def style_total_l(row):
-                    if row[CANAL_COL] == "TOTAL":
+                    if row.iloc[0] == "TOTAL":
                         return ["background:#1e3a5f;color:white;font-weight:bold"] * len(row)
                     return [""] * len(row)
 
                 st.dataframe(
-                    tabla_l.rename(columns={
-                        CANAL_COL: "Canal",
-                        "Cantidad": "Cantidad",
-                        "Litros": "Litros",
-                        "%_Part": "% Part.",
-                        "L_x_Dia": "L/Día",
-                    }).style
-                    .format({
-                        "Cantidad": "{:,.0f}",
-                        "Litros":   "{:,.1f}",
-                        "% Part.":  "{:.1f}%",
-                        "L/Día":    "{:,.1f}",
-                    })
-                    .apply(style_total_l, axis=1),
-                    use_container_width=True, hide_index=True
+                    tabla_l.style.apply(style_total_l, axis=1),
+                    column_config={
+                        "Canal de Ventas": st.column_config.TextColumn("Canal de Ventas"),
+                        "Cantidad":  st.column_config.NumberColumn("Cantidad",   format="%,.0f"),
+                        "Litros (L)":st.column_config.NumberColumn("Litros (L)", format="%,.1f"),
+                        "% Part.":   st.column_config.ProgressColumn("% Part.",
+                                        min_value=0, max_value=100, format="%.1f%%",
+                                        help="Participación porcentual del canal sobre el total de litros"),
+                        "L/Día":     st.column_config.NumberColumn("L/Día", format="%,.1f",
+                                        help="Litros promedio despachados por día del período"),
+                    },
+                    use_container_width=True, hide_index=True,
                 )
+
+                # Gráfica de barras horizontal
+                fig_canal = px.bar(
+                    agg_l.sort_values("Litros"), x="Litros", y=CANAL_COL,
+                    orientation="h", text_auto=".3s",
+                    color="Litros",
+                    color_continuous_scale=[[0,"#93c5fd"],[1,"#1d4ed8"]],
+                    labels={"Litros": "Litros (L)", CANAL_COL: ""},
+                )
+                fig_canal.update_layout(coloraxis_showscale=False,
+                                        plot_bgcolor="white", height=260,
+                                        margin=dict(t=10, b=10))
+                st.plotly_chart(fig_canal, use_container_width=True)
 
         with col_tipo:
             st.subheader("🔬 Por Tipo de Leche")
-            # Solo leches (no maquila) para el desglose por tipo
-            df_solo_leche = df_l[df_l["Familia"] == "Leches"] if "Familia" in df_l.columns else df_l
+            df_solo_leche = df_l[df_l["Familia"] == "LECHE"] if "Familia" in df_l.columns else df_l
 
             if "Tipo_Leche" in df_solo_leche.columns:
                 agg_t = df_solo_leche.groupby("Tipo_Leche").agg(
@@ -300,142 +334,144 @@ with tab_leches:
                     "%_Part":     100.0,
                     "L_x_Dia":    agg_t["Litros"].sum() / DIAS,
                 }])
-                tabla_t = pd.concat([agg_t, tot_t], ignore_index=True)
+                tabla_t = pd.concat([agg_t, tot_t], ignore_index=True).rename(columns={
+                    "Tipo_Leche": "Tipo",
+                    "Litros":     "Litros (L)",
+                    "%_Part":     "% Part.",
+                    "L_x_Dia":    "L/Día",
+                })
 
                 def style_total_t(row):
-                    if row["Tipo_Leche"] == "TOTAL":
+                    if row.iloc[0] == "TOTAL":
                         return ["background:#1e3a5f;color:white;font-weight:bold"] * len(row)
                     return [""] * len(row)
 
                 st.dataframe(
-                    tabla_t.rename(columns={
-                        "Tipo_Leche": "Tipo",
-                        "Litros": "Litros",
-                        "%_Part": "% Part.",
-                        "L_x_Dia": "L/Día",
-                    }).style
-                    .format({
-                        "Cantidad": "{:,.0f}",
-                        "Litros":   "{:,.1f}",
-                        "% Part.":  "{:.2f}%",
-                        "L/Día":    "{:,.1f}",
-                    })
-                    .apply(style_total_t, axis=1),
-                    use_container_width=True, hide_index=True
+                    tabla_t.style.apply(style_total_t, axis=1),
+                    column_config={
+                        "Tipo":      st.column_config.TextColumn("Tipo de Leche"),
+                        "Cantidad":  st.column_config.NumberColumn("Cantidad",   format="%,.0f"),
+                        "Litros (L)":st.column_config.NumberColumn("Litros (L)", format="%,.1f"),
+                        "% Part.":   st.column_config.ProgressColumn("% Part.",
+                                        min_value=0, max_value=100, format="%.1f%%",
+                                        help="Participación porcentual del tipo sobre el total de litros de leche"),
+                        "L/Día":     st.column_config.NumberColumn("L/Día", format="%,.1f",
+                                        help="Litros promedio por día del período"),
+                    },
+                    use_container_width=True, hide_index=True,
                 )
 
-                # Mini gráfica de torta
+                # Gráfica de torta (excluye N.R)
                 datos_pie = agg_t[agg_t["Tipo_Leche"] != "N.R"].copy()
                 if not datos_pie.empty:
                     fig_pie = px.pie(
                         datos_pie, values="Litros", names="Tipo_Leche",
                         color_discrete_map={
-                            "ENTERA":        "#3b82f6",
-                            "DESLACTOSADA":  "#22c55e",
-                            "SEMIDESCREMADA":"#f59e0b",
+                            "ENTERA":         "#3b82f6",
+                            "DESLACTOSADA":   "#22c55e",
+                            "SEMIDESCREMADA": "#f59e0b",
                         }
                     )
-                    fig_pie.update_layout(height=220, margin=dict(t=10, b=10))
+                    fig_pie.update_layout(height=260, margin=dict(t=10, b=10))
                     st.plotly_chart(fig_pie, use_container_width=True)
+                else:
+                    st.caption("ℹ️ Sin clasificación por tipo disponible (referencias no mapeadas)")
 
         # ── Sección 2: Calendario diario ──────────────────────────────────
         st.divider()
-        st.subheader("📅 Litros por Canal y Día")
-        st.caption("Solo familia Leches (excluye Maquila)")
+        st.subheader("📅 Litros por Canal de Ventas y Día")
+        st.caption("Solo familia LECHE (excluye Producción para Terceros)")
 
         if "Fecha" in df_solo_leche.columns and CANAL_COL in df_solo_leche.columns:
-            pivot_l = df_solo_leche.groupby(
-                [CANAL_COL, df_solo_leche["Fecha"].dt.strftime("%Y%m%d")]
-            )["Litros"].sum().reset_index()
-            pivot_l.columns = [CANAL_COL, "Fecha", "Litros"]
+            agrupar_semana_l = DIAS > 14
+            if agrupar_semana_l:
+                df_sl2 = df_solo_leche.copy()
+                df_sl2["_periodo"] = df_sl2["Fecha"].dt.to_period("W").dt.start_time.dt.strftime("%d-%b")
+                label_l = "Semana"
+                st.caption("Agrupado por semana (período > 14 días)")
+            else:
+                df_sl2 = df_solo_leche.copy()
+                df_sl2["_periodo"] = df_sl2["Fecha"].dt.strftime("%d-%b")
+                label_l = "Día"
 
-            pivot_wide_l = pivot_l.pivot_table(
-                index=CANAL_COL, columns="Fecha",
-                values="Litros", aggfunc="sum"
-            ).fillna(0)
+            serie_l = df_sl2.groupby([CANAL_COL, "_periodo"])["Litros"].sum().reset_index()
+            serie_l.columns = ["Canal de Ventas", label_l, "Litros (L)"]
 
-            pivot_wide_l.loc["Total general"] = pivot_wide_l.sum()
-
-            # Formatear en miles para legibilidad
-            pivot_display = pivot_wide_l / 1000  # mostrar en miles de litros
-
-            fig_heat_l = px.imshow(
-                pivot_display,
-                color_continuous_scale="Blues",
-                aspect="auto",
-                text_auto=".1f",
-                labels=dict(x="Fecha", y="Canal", color="Miles Litros"),
+            fig_heat_l = px.line(
+                serie_l, x=label_l, y="Litros (L)",
+                color="Canal de Ventas",
+                markers=True,
             )
             fig_heat_l.update_layout(
-                height=max(300, len(pivot_wide_l) * 48),
-                margin=dict(l=10, r=10, t=10, b=70),
-                coloraxis_showscale=False,
-                xaxis=dict(tickangle=-45, tickfont=dict(size=9)),
-                yaxis=dict(tickfont=dict(size=11)),
+                plot_bgcolor="white",
+                height=max(300, 350),
+                xaxis=dict(tickangle=-45),
+                legend=dict(orientation="h", y=-0.3),
+                margin=dict(t=10, b=80),
             )
-            fig_heat_l.update_traces(textfont_size=8)
             st.plotly_chart(fig_heat_l, use_container_width=True)
-            st.caption("Valores en miles de litros (kL)")
 
         # ── Sección 3: D y V / PAE ────────────────────────────────────────
         st.divider()
         st.subheader("📊 Resumen especial")
 
         # D y V = Distribuidores y Vendedores (locales + nacionales + otros)
-        dyv_canales = ["DISTRIBUIDORES LOCALES","DISTRIBUIDORES NACIONALES",
-                       "OTROS DISTRIBUIDORES","VENDEDORES"]
-        pae_canales = ["PAE"]
-
         if CANAL_COL in df_solo_leche.columns:
-            lit_dyv = df_solo_leche[df_solo_leche[CANAL_COL].isin(dyv_canales)]["Litros"].sum() \
-                      if "Litros" in df_solo_leche.columns else 0
-            lit_pae = df_solo_leche[df_solo_leche[CANAL_COL].isin(pae_canales)]["Litros"].sum() \
-                      if "Litros" in df_solo_leche.columns else 0
-            lit_smk_td = df_solo_leche[df_solo_leche[CANAL_COL].isin(
-                ["SUPERMERCADOS","TIENDAS DE DESCUENTO"])]["Litros"].sum() \
-                if "Litros" in df_solo_leche.columns else 0
+            lit_dyv    = df_solo_leche[df_solo_leche[CANAL_COL].isin(CANALES_DYV)]["Litros"].sum() \
+                         if "Litros" in df_solo_leche.columns else 0
+            lit_pae    = df_solo_leche[df_solo_leche[CANAL_COL].isin(CANALES_PAE)]["Litros"].sum() \
+                         if "Litros" in df_solo_leche.columns else 0
+            lit_smk_td = df_solo_leche[df_solo_leche[CANAL_COL].isin(CANALES_SMK_TD)]["Litros"].sum() \
+                         if "Litros" in df_solo_leche.columns else 0
 
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("🚛 D y V",           f"{lit_dyv:,.1f} L",
-                      delta=f"{lit_dyv/DIAS:,.1f} L/día")
+                      delta=f"{lit_dyv/DIAS:,.1f} L/día",
+                      help="Litros vendidos a Distribuidores y Vendedores (locales + nacionales)")
             c2.metric("🏫 PAE",             f"{lit_pae:,.1f} L",
-                      delta=f"{lit_pae/DIAS:,.1f} L/día")
+                      delta=f"{lit_pae/DIAS:,.1f} L/día",
+                      help="Litros vendidos al canal PAE (Programa de Alimentación Escolar)")
             c3.metric("🛒 SMK + TD",        f"{lit_smk_td:,.1f} L",
-                      delta=f"{lit_smk_td/DIAS:,.1f} L/día")
+                      delta=f"{lit_smk_td/DIAS:,.1f} L/día",
+                      help="Litros vendidos a Supermercados y Tiendas de Descuento")
             c4.metric("🥛 Total Leches",    f"{lit_total:,.1f} L",
-                      delta=f"{lit_dia:,.1f} L/día")
+                      delta=f"{lit_dia:,.1f} L/día",
+                      help="Volumen total vendido en litros")
 
         # ── Sección 4: Maquila Leche ──────────────────────────────────────
-        df_maq_leche = df_l[df_l["Familia"] == "Maquila Leche"] if "Familia" in df_l.columns else pd.DataFrame()
+        df_maq_leche = df_l[df_l["Familia"] == FAMILIA_MAQUILA] if "Familia" in df_l.columns else pd.DataFrame()
         if not df_maq_leche.empty:
             st.divider()
-            st.subheader("🏭 Maquila Leche")
+            st.subheader("🏭 Producción para Terceros (Maquila)")
             lit_maq = df_maq_leche["Litros"].sum() if "Litros" in df_maq_leche.columns else 0
 
             m1, m2 = st.columns(2)
-            m1.metric("🥛 Litros Maquila", f"{lit_maq:,.1f} L")
-            m2.metric("📅 L/Día Maquila",  f"{lit_maq/DIAS:,.1f} L/día")
+            m1.metric("🥛 Litros Maquila", f"{lit_maq:,.1f} L",
+                      help="Volumen total de producción para terceros en litros")
+            m2.metric("📅 L/Día Maquila",  f"{lit_maq/DIAS:,.1f} L/día",
+                      help="Promedio de litros de maquila por día del período")
 
             if "Fecha" in df_maq_leche.columns and CANAL_COL in df_maq_leche.columns:
-                pivot_m = df_maq_leche.groupby(
-                    [CANAL_COL, df_maq_leche["Fecha"].dt.strftime("%Y%m%d")]
-                )["Litros"].sum().reset_index()
-                pivot_m.columns = [CANAL_COL, "Fecha", "Litros"]
-                pivot_wide_m = pivot_m.pivot_table(
-                    index=CANAL_COL, columns="Fecha",
-                    values="Litros", aggfunc="sum"
-                ).fillna(0) / 1000
+                agrupar_maq = DIAS > 14
+                df_maq2 = df_maq_leche.copy()
+                df_maq2["_periodo"] = (
+                    df_maq2["Fecha"].dt.to_period("W").dt.start_time.dt.strftime("%d-%b")
+                    if agrupar_maq else
+                    df_maq2["Fecha"].dt.strftime("%d-%b")
+                )
+                label_maq = "Semana" if agrupar_maq else "Día"
+                serie_maq = df_maq2.groupby("_periodo")["Litros"].sum().reset_index()
+                serie_maq.columns = [label_maq, "Litros (L)"]
 
-                fig_maq = px.imshow(
-                    pivot_wide_m,
-                    color_continuous_scale="Greens",
-                    aspect="auto", text_auto=".2f",
+                fig_maq = px.bar(
+                    serie_maq, x=label_maq, y="Litros (L)",
+                    text_auto=".0f",
+                    color="Litros (L)",
+                    color_continuous_scale=[[0,"#86efac"],[1,"#15803d"]],
                 )
                 fig_maq.update_layout(
-                    height=150, margin=dict(l=10, r=10, t=10, b=60),
-                    coloraxis_showscale=False,
-                    xaxis=dict(tickangle=-45, tickfont=dict(size=9)),
+                    coloraxis_showscale=False, plot_bgcolor="white",
+                    height=250, margin=dict(t=10, b=60),
+                    xaxis=dict(tickangle=-45),
                 )
-                fig_maq.update_traces(textfont_size=9)
                 st.plotly_chart(fig_maq, use_container_width=True)
-                st.caption("Valores en miles de litros (kL)")

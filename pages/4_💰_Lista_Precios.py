@@ -169,10 +169,10 @@ if solo_con_impuesto:
 
 # Renombrar para presentación
 rename_map = {
-    "Lista_Precios": "ID_LIPRE1",
+    "Lista_Precios": "Lista Precios",
     "Familia":       "FAMILIA",
-    "Referencia":    "ID_REFERENCIA",
-    "Nombre_Item":   "DESCRIPCION2",
+    "Referencia":    "Referencia",
+    "Nombre_Item":   "Descripción",
 }
 tabla_display = tabla.rename(columns=rename_map)
 
@@ -182,8 +182,8 @@ if "FECHA_VIG" in tabla_display.columns:
         tabla_display["FECHA_VIG"], errors="coerce"
     ).dt.strftime("%Y%m%d").fillna("—")
 
-# Ordenar: ID_LIPRE1 > FAMILIA > ID_REFERENCIA
-sort_cols = [c for c in ["ID_LIPRE1", "FAMILIA", "ID_REFERENCIA"] if c in tabla_display.columns]
+# Ordenar: Lista Precios > FAMILIA > Referencia
+sort_cols = [c for c in ["Lista Precios", "FAMILIA", "Referencia"] if c in tabla_display.columns]
 if sort_cols:
     tabla_display = tabla_display.sort_values(sort_cols)
 
@@ -194,10 +194,14 @@ imp_total    = tabla[tabla["IMP_SALUDABLE"] > 0].shape[0]
 venta_total  = tabla["Valor_Neto"].sum()
 
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("📦 Ítems en lista",          f"{total_items:,}")
-k2.metric("💲 Precio promedio",         f"${precio_prom:,.0f}")
-k3.metric("🧪 Ítems con imp. saludable", f"{imp_total:,}")
-k4.metric("💰 Venta total período",     formatear_millones(venta_total))
+k1.metric("📦 Ítems en lista",          f"{total_items:,}",
+          help="Número de referencias de producto distintas en la lista seleccionada")
+k2.metric("💲 Precio promedio",         f"${precio_prom:,.0f}",
+          help="Precio unitario promedio en el período")
+k3.metric("🧪 Ítems con imp. saludable", f"{imp_total:,}",
+          help="Número de ítems con impuesto IBUA o ICUI mayor a cero")
+k4.metric("💰 Venta total período",     formatear_millones(venta_total),
+          help="Suma del valor neto facturado en el período (sin IVA)")
 
 st.divider()
 
@@ -207,7 +211,7 @@ st.caption("Precio = último precio unitario registrado  •  IMP_SALUDABLE = (I
 
 # Columnas a mostrar
 cols_show = [c for c in [
-    "ID_LIPRE1", "FAMILIA", "ID_REFERENCIA", "DESCRIPCION2",
+    "Lista Precios", "FAMILIA", "Referencia", "Descripción",
     "FECHA_VIG", "Precio", "IMP_SALUDABLE"
 ] if c in tabla_display.columns]
 
@@ -232,7 +236,15 @@ styled = (
     .set_properties(**{"font-size": "0.85rem"})
 )
 
-st.dataframe(styled, use_container_width=True, hide_index=True, height=520)
+st.dataframe(styled,
+             column_config={
+                 "Lista Precios": st.column_config.TextColumn("Lista Precios", help="Código de lista de precios asignada al cliente"),
+                 "Referencia":    st.column_config.TextColumn("Referencia",    help="Código de referencia del producto"),
+                 "Descripción":   st.column_config.TextColumn("Descripción",   help="Nombre o descripción del producto"),
+                 "FECHA_VIG":     st.column_config.TextColumn("Fecha Vigencia", help="Fecha de vigencia del precio (último registro)"),
+                 "IMP_SALUDABLE": st.column_config.NumberColumn("IMP_SALUDABLE", help="Impuesto saludable por unidad (IBUA + ICUI)"),
+             },
+             use_container_width=True, hide_index=True, height=520)
 
 # ── Resumen por Familia ────────────────────────────────────────────────────
 st.divider()
@@ -242,7 +254,7 @@ if "FAMILIA" in tabla_display.columns:
     resumen_fam = (
         tabla_display.groupby("FAMILIA")
         .agg(
-            Items        =("ID_REFERENCIA", "count") if "ID_REFERENCIA" in tabla_display.columns else ("FAMILIA","count"),
+            Items        =("Referencia", "count") if "Referencia" in tabla_display.columns else ("FAMILIA","count"),
             Precio_Prom  =("Precio", "mean"),
             Con_Impuesto =("IMP_SALUDABLE", lambda x: (x > 0).sum()),
             Imp_Prom     =("IMP_SALUDABLE", lambda x: x[x > 0].mean() if (x > 0).any() else 0),

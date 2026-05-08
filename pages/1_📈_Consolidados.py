@@ -94,11 +94,15 @@ rent   = df["Valor_Rentabilidad"].sum() if "Valor_Rentabilidad" in df.columns el
 cant   = df["Cantidad"].sum()           if "Cantidad"           in df.columns else 0
 
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("💰 Ventas Netas",  formatear_millones(venta))
-k2.metric("🏭 Costo Total",   formatear_millones(costo))
+k1.metric("💰 Ventas Netas",  formatear_millones(venta),
+          help="Suma del valor neto facturado en el período (sin IVA)")
+k2.metric("🏭 Costo Total",   formatear_millones(costo),
+          help="Costo promedio total de los ítems vendidos")
 k3.metric("📈 Rentabilidad",  formatear_millones(rent),
-          delta=f"{rent/venta*100:.1f}%" if venta else None)
-k4.metric("📦 Cantidad",      f"{cant:,.0f}")
+          delta=f"{rent/venta*100:.1f}%" if venta else None,
+          help="Ventas Netas menos Costo Total")
+k4.metric("📦 Cantidad",      f"{cant:,.0f}",
+          help="Número total de unidades vendidas")
 
 st.divider()
 
@@ -178,7 +182,13 @@ with tab1:
     )
 
     st.subheader("📋 Resumen por Canal")
-    st.dataframe(styled_c, use_container_width=True, hide_index=True)
+    st.dataframe(styled_c,
+                 column_config={
+                     "% Rent.":  st.column_config.NumberColumn("% Rent.",  help="Rentabilidad como porcentaje de las ventas netas"),
+                     "% Part.":  st.column_config.NumberColumn("% Part.",  help="Participación porcentual sobre el total del período"),
+                     "% Costo":  st.column_config.NumberColumn("% Costo",  help="Costo como porcentaje de las ventas netas"),
+                 },
+                 use_container_width=True, hide_index=True)
 
     # Gráficas
     g1, g2 = st.columns(2)
@@ -477,6 +487,11 @@ with tab3:
             display_f.style.format(fmt_f)
                            .apply(color_total_f, axis=1)
                            .map(semaforo_rent, subset=["% Rent."]),
+            column_config={
+                "% Rent.":  st.column_config.NumberColumn("% Rent.",  help="Rentabilidad como porcentaje de las ventas netas"),
+                "% Part.":  st.column_config.NumberColumn("% Part.",  help="Participación porcentual sobre el total del período"),
+                "% Costo":  st.column_config.NumberColumn("% Costo",  help="Costo como porcentaje de las ventas netas"),
+            },
             use_container_width=True, hide_index=True
         )
 

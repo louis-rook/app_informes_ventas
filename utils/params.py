@@ -250,6 +250,41 @@ MOTIVOS_OBSEQUIO = {"OBSEQUIOS", "OBSEQUIOS BENEFICENCIA", "CONSUMO MERIENDA EMP
                     "PDV OBSEQUIOS", "NOTA CREDITO OBSEQUIOS PDV",
                     "DEGUSTACIONES Y PROMOCIONES EN VENTAS", "ANULACION DE OBSEQUIOS Y CONSUMOS"}
 
+# ─────────────────────────────────────────────────────────────────────────────
+# FAMILIAS DE PRODUCTOS (Desc. U.N. en el sistema)
+# Usado en el módulo de Volúmenes
+# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# CONVERSIÓN SUEROS: ml por unidad vendida (para calcular Litros desde Cantidad)
+# El sistema no registra Vol?men en LTR para sueros — se calcula aquí.
+# Para ítems en KG (U.M. inv. = KG) se usa 1 KG = 1 L directamente.
+# ─────────────────────────────────────────────────────────────────────────────
+ML_POR_REFERENCIA_SUERO = {
+    "4030404":  200,   # SUERO DOYPACK X 200 GRS
+    "4030405":  400,   # SUERO DOYPACK X 400 GRS
+    "4030407":   38,   # SUERO SACHET X 38 GR
+    "4030458":  200,   # SUERO LATTI BOLSA X 200 GR
+    "4030411":  200,   # SUERO PICANTE DOYPACK X 200 GRS
+    "4030409": 4000,   # SUERO BOLSA CON VALVULA X 4 KLS
+    "4030431":  400,   # SUERO COSTENO KLARENS TRIPACK X 400 GR
+    "4030457":  570,   # SUERO SACHET X 38 GR BOLSA X 15 UND (15×38)
+    "4030413": 1140,   # SUERO SACHET X 38 GR BOLSA X 30 UND (30×38)
+    "4030432":  200,   # SUERO FRESCAMPO BOLSA X 200 GR
+}
+
+FAMILIAS_SUERO  = ["SUEROS"]
+FAMILIAS_LECHE  = ["LECHE", "PRODUCCION PARA TERCEROS"]
+FAMILIA_MAQUILA = "PRODUCCION PARA TERCEROS"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AGRUPACIONES DE CANALES DE VENTAS
+# Usado en el módulo de Volúmenes (resumen especial)
+# ─────────────────────────────────────────────────────────────────────────────
+CANALES_DYV    = ["DISTRIBUIDORES LOCALES", "DISTRIBUIDORES NACIONALES",
+                  "OTROS DISTRIBUIDORES", "VENDEDORES"]
+CANALES_PAE    = ["PAE"]
+CANALES_SMK_TD = ["SUPERMERCADOS", "TIENDAS DE DESCUENTO"]
+
 
 def enriquecer_df(df):
     """

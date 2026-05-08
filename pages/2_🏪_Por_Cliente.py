@@ -120,12 +120,17 @@ cant  = df["Cantidad"].sum()           if "Cantidad"           in df.columns els
 n_cli = df["Nombre_Cliente"].nunique() if "Nombre_Cliente"     in df.columns else 0
 
 k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("💰 Ventas Netas", formatear_millones(venta))
-k2.metric("🏭 Costo Total",  formatear_millones(costo))
+k1.metric("💰 Ventas Netas", formatear_millones(venta),
+          help="Suma del valor neto facturado en el período (sin IVA)")
+k2.metric("🏭 Costo Total",  formatear_millones(costo),
+          help="Costo promedio total de los ítems vendidos")
 k3.metric("📈 Rentabilidad", formatear_millones(rent),
-          delta=f"{rent/venta*100:.1f}%" if venta else None)
-k4.metric("📦 Cantidad",     f"{cant:,.0f}")
-k5.metric("👥 Clientes",     f"{n_cli:,}")
+          delta=f"{rent/venta*100:.1f}%" if venta else None,
+          help="Ventas Netas menos Costo Total")
+k4.metric("📦 Cantidad",     f"{cant:,.0f}",
+          help="Número total de unidades vendidas")
+k5.metric("👥 Clientes",     f"{n_cli:,}",
+          help="Clientes con al menos una venta en el período")
 
 st.divider()
 
@@ -283,12 +288,17 @@ with tab2:
     lt_c = dff["Litros"].sum()             if "Litros"             in dff.columns else 0
 
     k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("💰 Ventas",   formatear_millones(v_c))
-    k2.metric("🏭 Costo",    formatear_millones(c_c))
+    k1.metric("💰 Ventas",   formatear_millones(v_c),
+              help="Suma del valor neto facturado en el período (sin IVA)")
+    k2.metric("🏭 Costo",    formatear_millones(c_c),
+              help="Costo promedio total de los ítems vendidos")
     k3.metric("📈 Rentab.",  formatear_millones(r_c),
-              delta=f"{r_c/v_c*100:.1f}%" if v_c else None)
-    k4.metric("📦 Cantidad", f"{q_c:,.0f}")
-    k5.metric("🥛 Litros",   f"{lt_c:,.1f}")
+              delta=f"{r_c/v_c*100:.1f}%" if v_c else None,
+              help="Ventas Netas menos Costo Total")
+    k4.metric("📦 Cantidad", f"{q_c:,.0f}",
+              help="Número total de unidades vendidas")
+    k5.metric("🥛 Litros",   f"{lt_c:,.1f}",
+              help="Volumen total vendido en litros")
 
     st.divider()
     st.subheader("📋 Detalle por ítem")
@@ -303,6 +313,7 @@ with tab2:
         agg["Margen_%"] = agg["Rentab"] / agg["Neto_Calc"].where(agg["Neto_Calc"] != 0, 1) * 100
         agg["Precio_U"] = agg["Neto_Calc"] / agg["Cantidad"].where(agg["Cantidad"] != 0, 1)
         agg = agg.sort_values("Neto_Calc", ascending=False)
+        agg = agg.rename(columns={"Rentab": "Rentab. ($)", "Precio_U": "Precio Unit."})
 
         def color_mg(val):
             if not isinstance(val, (int, float)): return ""
@@ -312,13 +323,18 @@ with tab2:
 
         st.dataframe(
             agg.style.format({
-                "Cantidad":  "{:,.0f}",
-                "Neto_Calc": "${:,.0f}",
-                "Costo":     "${:,.0f}",
-                "Rentab":    "${:,.0f}",
-                "Margen_%":  "{:.2f}%",
-                "Precio_U":  "${:,.0f}",
+                "Cantidad":     "{:,.0f}",
+                "Neto_Calc":    "${:,.0f}",
+                "Costo":        "${:,.0f}",
+                "Rentab. ($)":  "${:,.0f}",
+                "Margen_%":     "{:.2f}%",
+                "Precio Unit.": "${:,.0f}",
             }).map(color_mg, subset=["Margen_%"]),
+            column_config={
+                "Neto_Calc":    st.column_config.NumberColumn("Neto_Calc",    help="Valor neto calculado internamente"),
+                "Rentab. ($)":  st.column_config.NumberColumn("Rentab. ($)",  help="Ventas Netas menos Costo Total en pesos"),
+                "Precio Unit.": st.column_config.NumberColumn("Precio Unit.", help="Precio unitario promedio en el período"),
+            },
             use_container_width=True, hide_index=True
         )
 
