@@ -74,6 +74,7 @@ if co_sel != "Todos" and CO_COL:
     df = df[df[CO_COL] == co_sel]
 
 st.title("🏆 Desempeño de Vendedores")
+st.caption("Analiza el rendimiento de cada vendedor en el período seleccionado. Compara ventas, margen, clientes atendidos y descuentos otorgados. Usa el ranking para identificar a los mejores vendedores y detectar oportunidades de mejora.")
 st.caption(f"Canal: **{canal_sel}**  •  C.O.: **{co_sel}**  •  Registros: {len(df):,}")
 
 if df.empty:
@@ -269,6 +270,7 @@ with tab1:
 # TAB 2 – DETALLE POR VENDEDOR
 # ─────────────────────────────────────────────────────────────────────────
 with tab2:
+    st.caption("Perfil individual de cada vendedor: KPIs de ventas, margen y clientes, rutas asignadas, top 15 clientes y top 10 productos más vendidos. Selecciona un vendedor para ver su detalle completo.")
     vendedores_lista = sorted(df[VEND_COL].dropna().unique().tolist())
     vend_sel = st.selectbox("Selecciona vendedor", vendedores_lista)
     df_v = df[df[VEND_COL] == vend_sel].copy()
@@ -340,6 +342,7 @@ with tab3:
         st.info("Se requiere columna Fecha.")
     else:
         st.subheader("📈 Ventas diarias — Top vendedores")
+        st.caption("Evolución diaria de ventas de los 8 vendedores con mayor facturación. Cada línea es un vendedor. Permite identificar quién crece, quién cae y detectar picos o brechas en la actividad comercial.")
         top_vend_names = ranking.head(8)[VEND_COL].tolist()
         df_top = df[df[VEND_COL].isin(top_vend_names)].copy()
 

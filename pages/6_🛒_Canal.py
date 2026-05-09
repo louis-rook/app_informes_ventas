@@ -168,6 +168,7 @@ with tab1:
             return [""] * len(row)
 
         st.subheader("📋 Tabla por Canal")
+        st.caption("Resumen de ventas por cada Canal de Ventas. **% Margen** = (Ventas − Costo) / Ventas (semáforo: 🟢 ≥35% 🟡 20–35% 🔴 <20%) · **% Part.** = participación porcentual de ese canal sobre el total · **% Dscto. Prom.** = descuento promedio aplicado en facturas de ese canal.")
         col_cfg = {
             "% Margen":      st.column_config.NumberColumn("% Margen",      help="(Ventas - Costo) / Ventas × 100"),
             "% Part.":       st.column_config.NumberColumn("% Part.",       help="Participación porcentual sobre el total del período"),
@@ -308,6 +309,7 @@ with tab2:
         st.info("Se requieren columnas de Canal y Fecha.")
     else:
         st.subheader("📈 Evolución de ventas por canal")
+        st.caption("Muestra cómo evolucionaron las ventas de cada canal a lo largo del tiempo. Selecciona 'Día' para ver el detalle diario o 'Semana' para una vista más suavizada. Cada línea es un canal diferente.")
         granularidad = st.radio("Agrupar por", ["Día", "Semana"], horizontal=True)
 
         df_t = df.copy()
@@ -369,6 +371,7 @@ with tab3:
         st.info("Se requieren columnas de Canal e Ítem.")
     else:
         st.subheader("🏆 Top productos dentro de cada canal")
+        st.caption("Los 20 productos con mayores ventas dentro del canal seleccionado. El color de las barras indica el margen: 🟢 alto · 🟡 medio · 🔴 bajo. La tabla detalla ventas, unidades y % de margen por producto.")
         canales_disp = sorted(df[CANAL_COL].dropna().unique().tolist())
         canal_tab3 = st.selectbox("Selecciona el canal a analizar", canales_disp, key="t3")
 

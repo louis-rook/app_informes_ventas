@@ -129,6 +129,7 @@ with tab_sueros:
                   help="Promedio de litros vendidos por día del período")
 
         st.divider()
+        st.caption("Analiza el volumen despachado de **sueros** en litros. Los litros se calculan a partir de las unidades vendidas multiplicadas por el volumen por unidad de cada referencia (no viene directamente del ERP).")
 
         for familia in FAMILIAS_SUERO:
             df_fam = df_s[df_s["Familia"] == familia] if "Familia" in df_s.columns else df_s
@@ -149,38 +150,23 @@ with tab_sueros:
                 agg["L_x_Dia"] = agg["Litros"] / DIAS
                 agg = agg.sort_values("Litros", ascending=False)
 
-                tot = pd.DataFrame([{
-                    CANAL_COL:  "TOTAL",
-                    "Cantidad": agg["Cantidad"].sum(),
-                    "Litros":   agg["Litros"].sum(),
-                    "%_Part":   100.0,
-                    "L_x_Dia":  agg["Litros"].sum() / DIAS,
-                }])
-                tabla_s = pd.concat([agg[[CANAL_COL,"Cantidad","Litros","%_Part","L_x_Dia"]],
-                                     tot[[CANAL_COL,"Cantidad","Litros","%_Part","L_x_Dia"]]],
-                                    ignore_index=True)
-
-                def style_total_s(row):
-                    if row.iloc[0] == "TOTAL":
-                        return ["background:#1e3a5f;color:white;font-weight:bold"] * len(row)
-                    return [""] * len(row)
-
-                tabla_s_disp = tabla_s.rename(columns={
+                tabla_s_disp = agg[[CANAL_COL,"Cantidad","Litros","%_Part","L_x_Dia"]].rename(columns={
                     CANAL_COL: "Canal de Ventas",
                     "Litros":  "Litros (L)",
                     "%_Part":  "% Part.",
                     "L_x_Dia": "L/Día",
                 })
                 st.dataframe(
-                    tabla_s_disp.style.apply(style_total_s, axis=1),
+                    tabla_s_disp.style
+                        .format({"Cantidad": "{:,.0f}", "Litros (L)": "{:,.1f}", "L/Día": "{:,.1f}"}),
                     column_config={
                         "Canal de Ventas": st.column_config.TextColumn("Canal de Ventas"),
-                        "Cantidad":   st.column_config.NumberColumn("Cantidad",   format="%,.0f"),
-                        "Litros (L)": st.column_config.NumberColumn("Litros (L)", format="%,.1f"),
+                        "Cantidad":   st.column_config.NumberColumn("Cantidad"),
+                        "Litros (L)": st.column_config.NumberColumn("Litros (L)"),
                         "% Part.":    st.column_config.ProgressColumn("% Part.",
                                         min_value=0, max_value=100, format="%.1f%%",
                                         help="Participación porcentual del canal sobre el total de litros"),
-                        "L/Día":      st.column_config.NumberColumn("L/Día", format="%,.1f",
+                        "L/Día":      st.column_config.NumberColumn("L/Día",
                                         help="Litros promedio despachados por día del período"),
                     },
                     use_container_width=True, hide_index=True,
@@ -257,6 +243,7 @@ with tab_leches:
 
         with col_canal:
             st.subheader("📋 Por Canal de Ventas")
+            st.caption("Distribución de los litros de leche vendidos por cada canal. **L/Día** = promedio de litros despachados por día hábil del período.")
             if CANAL_COL in df_l.columns:
                 agg_l = df_l.groupby(CANAL_COL).agg(
                     Cantidad =("Cantidad", "sum"),
@@ -266,35 +253,23 @@ with tab_leches:
                 agg_l["L_x_Dia"] = agg_l["Litros"] / DIAS
                 agg_l = agg_l.sort_values("Litros", ascending=False)
 
-                tot_l = pd.DataFrame([{
-                    CANAL_COL: "TOTAL",
-                    "Cantidad": agg_l["Cantidad"].sum(),
-                    "Litros":   agg_l["Litros"].sum(),
-                    "%_Part":   100.0,
-                    "L_x_Dia":  agg_l["Litros"].sum() / DIAS,
-                }])
-                tabla_l = pd.concat([agg_l, tot_l], ignore_index=True).rename(columns={
+                tabla_l = agg_l.rename(columns={
                     CANAL_COL: "Canal de Ventas",
                     "Litros":  "Litros (L)",
                     "%_Part":  "% Part.",
                     "L_x_Dia": "L/Día",
                 })
-
-                def style_total_l(row):
-                    if row.iloc[0] == "TOTAL":
-                        return ["background:#1e3a5f;color:white;font-weight:bold"] * len(row)
-                    return [""] * len(row)
-
                 st.dataframe(
-                    tabla_l.style.apply(style_total_l, axis=1),
+                    tabla_l.style
+                        .format({"Cantidad": "{:,.0f}", "Litros (L)": "{:,.1f}", "L/Día": "{:,.1f}"}),
                     column_config={
                         "Canal de Ventas": st.column_config.TextColumn("Canal de Ventas"),
-                        "Cantidad":  st.column_config.NumberColumn("Cantidad",   format="%,.0f"),
-                        "Litros (L)":st.column_config.NumberColumn("Litros (L)", format="%,.1f"),
+                        "Cantidad":  st.column_config.NumberColumn("Cantidad"),
+                        "Litros (L)":st.column_config.NumberColumn("Litros (L)"),
                         "% Part.":   st.column_config.ProgressColumn("% Part.",
                                         min_value=0, max_value=100, format="%.1f%%",
                                         help="Participación porcentual del canal sobre el total de litros"),
-                        "L/Día":     st.column_config.NumberColumn("L/Día", format="%,.1f",
+                        "L/Día":     st.column_config.NumberColumn("L/Día",
                                         help="Litros promedio despachados por día del período"),
                     },
                     use_container_width=True, hide_index=True,
@@ -315,6 +290,7 @@ with tab_leches:
 
         with col_tipo:
             st.subheader("🔬 Por Tipo de Leche")
+            st.caption("Desglose por tipo de leche: Entera, Deslactosada, Semidescremada. La clasificación se hace por referencia de producto. **N.R** = sin clasificar (referencia no mapeada).")
             df_solo_leche = df_l[df_l["Familia"] == "LECHE"] if "Familia" in df_l.columns else df_l
 
             if "Tipo_Leche" in df_solo_leche.columns:
@@ -327,35 +303,23 @@ with tab_leches:
                 agg_t["L_x_Dia"] = agg_t["Litros"] / DIAS
                 agg_t = agg_t.sort_values("Litros", ascending=False)
 
-                tot_t = pd.DataFrame([{
-                    "Tipo_Leche": "TOTAL",
-                    "Cantidad":   agg_t["Cantidad"].sum(),
-                    "Litros":     agg_t["Litros"].sum(),
-                    "%_Part":     100.0,
-                    "L_x_Dia":    agg_t["Litros"].sum() / DIAS,
-                }])
-                tabla_t = pd.concat([agg_t, tot_t], ignore_index=True).rename(columns={
+                tabla_t = agg_t.rename(columns={
                     "Tipo_Leche": "Tipo",
                     "Litros":     "Litros (L)",
                     "%_Part":     "% Part.",
                     "L_x_Dia":    "L/Día",
                 })
-
-                def style_total_t(row):
-                    if row.iloc[0] == "TOTAL":
-                        return ["background:#1e3a5f;color:white;font-weight:bold"] * len(row)
-                    return [""] * len(row)
-
                 st.dataframe(
-                    tabla_t.style.apply(style_total_t, axis=1),
+                    tabla_t.style
+                        .format({"Cantidad": "{:,.0f}", "Litros (L)": "{:,.1f}", "L/Día": "{:,.1f}"}),
                     column_config={
                         "Tipo":      st.column_config.TextColumn("Tipo de Leche"),
-                        "Cantidad":  st.column_config.NumberColumn("Cantidad",   format="%,.0f"),
-                        "Litros (L)":st.column_config.NumberColumn("Litros (L)", format="%,.1f"),
+                        "Cantidad":  st.column_config.NumberColumn("Cantidad"),
+                        "Litros (L)":st.column_config.NumberColumn("Litros (L)"),
                         "% Part.":   st.column_config.ProgressColumn("% Part.",
                                         min_value=0, max_value=100, format="%.1f%%",
                                         help="Participación porcentual del tipo sobre el total de litros de leche"),
-                        "L/Día":     st.column_config.NumberColumn("L/Día", format="%,.1f",
+                        "L/Día":     st.column_config.NumberColumn("L/Día",
                                         help="Litros promedio por día del período"),
                     },
                     use_container_width=True, hide_index=True,
@@ -414,6 +378,7 @@ with tab_leches:
         # ── Sección 3: D y V / PAE ────────────────────────────────────────
         st.divider()
         st.subheader("📊 Resumen especial")
+        st.caption("**D y V** = Distribuidores y Vendedores (locales + nacionales + otros). **PAE** = Programa de Alimentación Escolar. **SMK + TD** = Supermercados y Tiendas de Descuento. El delta en cada métrica muestra el promedio diario.")
 
         # D y V = Distribuidores y Vendedores (locales + nacionales + otros)
         if CANAL_COL in df_solo_leche.columns:

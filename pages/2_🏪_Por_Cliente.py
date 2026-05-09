@@ -107,6 +107,7 @@ if vend_sel != "Todos" and "Nombre_Vendedor" in df.columns:
 
 # ── Título y KPIs globales ─────────────────────────────────────────────────
 st.title("🏪 Análisis por Cliente")
+st.caption("Vista jerárquica: selecciona un **Centro de Operación → Vendedor → Cliente** para ver el detalle de compras. Cada nivel muestra ventas, costo, rentabilidad y unidades acumuladas.")
 st.caption(f"Motivo: **{tipo_motivo}**  •  Canal: **{canal_sel}**  •  C.O.: **{co_sel}**  •  Registros: {len(df):,}")
 
 if df.empty:
@@ -302,6 +303,7 @@ with tab2:
 
     st.divider()
     st.subheader("📋 Detalle por ítem")
+    st.caption("Lista de todos los productos comprados por este cliente en el período, ordenados por valor neto. **Margen_%** = (Ventas − Costo) / Ventas. **Precio Unit.** = precio promedio de venta del ítem en el período.")
     gcols = [c for c in ["Familia", "Referencia", "Nombre_Item"] if c in dff.columns]
     if gcols:
         agg = dff.groupby(gcols).agg(
@@ -343,6 +345,7 @@ with tab2:
         col_ev1, col_ev2 = st.columns(2)
         with col_ev1:
             st.subheader("📅 Evolución de ventas")
+            st.caption("Área sombreada con las ventas diarias del cliente en el período. Permite identificar picos de compra, estacionalidades o brechas sin pedidos.")
             serie = dff.groupby(dff["Fecha"].dt.date)["Valor_Neto"].sum().reset_index()
             serie.columns = ["Fecha", "Ventas"]
             fig = px.area(serie, x="Fecha", y="Ventas",
@@ -352,6 +355,7 @@ with tab2:
         with col_ev2:
             if "Familia" in dff.columns:
                 st.subheader("🧪 Por Familia")
+                st.caption("Distribución de las compras del cliente por familia de producto. Las familias más grandes en el gráfico representan las categorías más compradas en el período.")
                 pf = dff.groupby("Familia")["Valor_Neto"].sum().reset_index()
                 pf = pf[pf["Valor_Neto"] > 0]
                 fig2 = px.pie(pf, values="Valor_Neto", names="Familia",

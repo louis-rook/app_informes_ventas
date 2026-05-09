@@ -86,6 +86,7 @@ with st.sidebar:
 
 # ── Título ─────────────────────────────────────────────────────────────────
 st.title("💰 Análisis por Lista de Precios")
+st.caption("Replica la hoja **Análisis x Lista de Precios** del informe Excel. Muestra qué precio tiene cada producto según la lista de precios asignada al cliente. Una misma referencia puede tener precios distintos en diferentes listas. **IBUA** = Impuesto a las Bebidas Ultra-procesadas Azucaradas · **ICUI** = Impuesto a los Comestibles Ultra-procesados con alto contenido de azúcares. Ambos se muestran en la columna **IMP_SALUDABLE** como valor por unidad.")
 
 lp_label = ", ".join(lp_sel) if lp_sel else "Todas"
 st.caption(f"LP: **{lp_label}**  •  Familia: **{familia_sel}**  •  Tipo: **{tipo_sel}**")
@@ -249,6 +250,7 @@ st.dataframe(styled,
 # ── Resumen por Familia ────────────────────────────────────────────────────
 st.divider()
 st.subheader("📊 Resumen por Familia")
+st.caption("Agrupa las referencias por familia de producto. **N° Ítems** = referencias distintas en esa familia dentro de la lista seleccionada · **Precio Prom ($)** = precio unitario promedio de todos los ítems de la familia · **Con Imp. Saludable** = cantidad de referencias que tienen IBUA o ICUI · **Imp. Saludable Prom ($)** = valor promedio del impuesto por unidad en las referencias que lo tienen.")
 
 if "FAMILIA" in tabla_display.columns:
     resumen_fam = (

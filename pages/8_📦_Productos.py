@@ -125,41 +125,53 @@ with tab1:
         top["%_Margen"] = top["Margen"] / top["Ventas"].replace(0, 1)
         top["%_Part"]   = top["Ventas"] / total_vn if total_vn else 0
 
-        col_g, col_t = st.columns([3, 2])
-        with col_g:
-            st.subheader(f"💰 Top {top_n} por Ventas Netas")
-            fig_top = px.bar(
-                top.sort_values("Ventas"), x="Ventas", y=ITEM_COL,
-                orientation="h", color="%_Margen",
-                color_continuous_scale="RdYlGn", text_auto=".3s",
-                labels={"Ventas": "$", ITEM_COL: "", "%_Margen": "% Margen"},
-            )
-            fig_top.update_layout(
-                plot_bgcolor="white", height=max(450, top_n * 30),
-                coloraxis_colorbar=dict(tickformat=".0%", title="% Margen"),
-            )
-            st.plotly_chart(fig_top, use_container_width=True)
+        # ── Gráfica ──────────────────────────────────────────────────────────
+        st.subheader(f"💰 Top {top_n} por Ventas Netas")
+        st.caption("Barras horizontales con los productos de mayor venta. El color de cada barra indica su % de margen: 🟢 verde = alto · 🟡 amarillo = medio · 🔴 rojo = bajo. Ajusta el 'Top N' en el panel lateral.")
+        fig_top = px.bar(
+            top.sort_values("Ventas"), x="Ventas", y=ITEM_COL,
+            orientation="h", color="%_Margen",
+            color_continuous_scale="RdYlGn", text_auto=".3s",
+            labels={"Ventas": "Ventas ($)", ITEM_COL: "", "%_Margen": "% Margen"},
+        )
+        fig_top.update_layout(
+            plot_bgcolor="white", height=max(500, top_n * 32),
+            coloraxis_colorbar=dict(tickformat=".0%", title="% Margen"),
+            margin=dict(l=10, r=10, t=20, b=20),
+        )
+        st.plotly_chart(fig_top, use_container_width=True)
 
-        with col_t:
-            st.subheader("📋 Detalle")
-            fmt = {
-                "Ventas": "{:,.0f}", "Margen": "{:,.0f}",
-                "Unidades": "{:,.0f}", "%_Margen": "{:.2%}", "%_Part": "{:.2%}",
-            }
-            if LITROS_COL: fmt["Litros"] = "{:,.1f}"
-            st.dataframe(
-                top[[ITEM_COL, "Ventas", "%_Margen", "%_Part", "Unidades"]]
-                .rename(columns={ITEM_COL: "Producto", "Ventas": "$",
-                                  "%_Margen": "% Margen", "%_Part": "% Part."})
-                .style.format({"$": "{:,.0f}", "% Margen": "{:.2%}", "% Part.": "{:.2%}",
-                               "Unidades": "{:,.0f}"})
-                .map(semaforo, subset=["% Margen"]),
-                column_config={
-                    "% Margen": st.column_config.NumberColumn("% Margen", help="(Ventas - Costo) / Ventas × 100"),
-                    "% Part.":  st.column_config.NumberColumn("% Part.",  help="Participación porcentual sobre el total del período"),
-                },
-                use_container_width=True, hide_index=True, height=500
-            )
+        # ── Tabla ─────────────────────────────────────────────────────────────
+        st.subheader("📋 Detalle")
+        st.caption("Tabla de los mismos productos con sus métricas. **Ventas ($)** = Ventas Netas · **% Margen** = (Ventas − Costo) / Ventas · **% Part.** = participación sobre el total · **Margen ($)** = ganancia en pesos.")
+        cols_det = [ITEM_COL, "Ventas", "Margen", "%_Margen", "%_Part", "Unidades"]
+        if LITROS_COL and "Litros" in top.columns:
+            cols_det.append("Litros")
+        top_det = top[cols_det].rename(columns={
+            ITEM_COL:   "Producto",
+            "Ventas":   "Ventas ($)",
+            "Margen":   "Margen ($)",
+            "%_Margen": "% Margen",
+            "%_Part":   "% Part.",
+        })
+        fmt_det = {
+            "Ventas ($)": "{:,.0f}",
+            "Margen ($)": "{:,.0f}",
+            "Unidades":   "{:,.0f}",
+            "% Margen":   "{:.2%}",
+            "% Part.":    "{:.2%}",
+        }
+        if LITROS_COL and "Litros" in top.columns:
+            fmt_det["Litros"] = "{:,.1f}"
+        st.dataframe(
+            top_det.style.format(fmt_det).map(semaforo, subset=["% Margen"]),
+            column_config={
+                "% Margen":   st.column_config.NumberColumn("% Margen",   help="(Ventas − Costo) / Ventas × 100"),
+                "% Part.":    st.column_config.NumberColumn("% Part.",     help="Participación sobre el total del período"),
+                "Margen ($)": st.column_config.NumberColumn("Margen ($)",  help="Rentabilidad en pesos = Ventas − Costo"),
+            },
+            use_container_width=True, hide_index=True,
+        )
 
         # Pareto acumulado
         st.subheader("📊 Regla 80/20 — concentración de ventas")
@@ -249,6 +261,7 @@ with tab2:
             agg_tree[col] = agg_tree[col].astype(str).str.strip()
 
         st.subheader("🗂️ Treemap de ventas por grupo")
+        st.caption("Mapa de área donde el tamaño de cada bloque representa las ventas. Los bloques más grandes son los grupos/productos que más venden. El color indica el % de margen (verde = alto, rojo = bajo). Haz clic en un grupo para ver su detalle.")
         fig_tree = px.treemap(
             agg_tree,
             path=[px.Constant("Todos")] + treemap_cols,
@@ -267,6 +280,7 @@ with tab2:
         # Tabla por grupo
         if FAM_COL:
             st.subheader("📋 Resumen por Grupo")
+            st.caption("Ventas totales por familia de producto con rentabilidad. **N° Ítems** = referencias distintas dentro de ese grupo · **% Margen** indica la rentabilidad promedio de la categoría.")
             resumen_g = df.groupby(FAM_COL).agg(
                 Ventas=("Valor_Neto", "sum"),
                 Margen=("Valor_Rentabilidad", "sum"),
@@ -305,6 +319,7 @@ with tab3:
         st.info("Se requieren columnas de precio unitario e ítem.")
     else:
         st.subheader("💲 Precio unitario por producto")
+        st.caption("Cada punto es un producto. **Eje X** = precio promedio de venta · **Eje Y** = variación entre el precio más alto y más bajo registrado (Max − Min). Una variación alta puede indicar descuentos inconsistentes entre clientes o fechas. El tamaño del punto representa el volumen de ventas.")
         precio_data = (
             df.groupby(ITEM_COL)
             .agg(
@@ -368,6 +383,7 @@ with tab4:
         st.info("Se requieren columnas Fecha e Ítem.")
     else:
         st.subheader("📅 Evolución de ventas por producto")
+        st.caption("Evolución diaria de ventas de los 8 productos con mayor facturación. Cada línea es un producto. Permite identificar estacionalidades, picos de demanda y caídas.")
         # Solo top 8 por ventas para que la gráfica sea legible
         top8 = df.groupby(ITEM_COL)["Valor_Neto"].sum().nlargest(8).index.tolist()
         df_t8 = df[df[ITEM_COL].isin(top8)].copy()

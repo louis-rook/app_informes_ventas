@@ -18,6 +18,7 @@ if df.empty:
     st.stop()
 
 st.title("🔍 Consulta Libre")
+st.caption("Busca y analiza el historial de un **cliente específico** o de un **producto específico**. Usa el panel izquierdo para filtrar por nombre, rango de fechas y otros criterios.")
 modo = st.radio("¿Qué quieres consultar?", ["Por Cliente", "Por Ítem"], horizontal=True)
 st.divider()
 
@@ -80,6 +81,7 @@ if modo == "Por Cliente":
         k4.metric("📦 Unidades", f"{cant:,.0f}")
 
         st.markdown("#### Ítems comprados")
+        st.caption("Lista de todos los productos comprados por este cliente en el período, ordenados por valor. **%Rent** = (Ventas − Costo) / Ventas.")
         gcols = [c for c in ["Familia", "Referencia", "Nombre_Item"] if c in dff.columns]
         if gcols:
             tbl = dff.groupby(gcols).agg(
@@ -239,6 +241,7 @@ else:
 
         if "Nombre_Cliente" in dfi.columns:
             st.markdown("#### Top clientes compradores")
+            st.caption("Los 20 clientes que más compraron este producto en el período, ordenados por valor de compra.")
             top_c = dfi.groupby("Nombre_Cliente")["Valor_Neto"].sum().nlargest(20).reset_index()
             top_c.columns = ["Cliente", "Ventas Netas ($)"]
             top_c["Ventas Netas ($)"] = top_c["Ventas Netas ($)"].map(lambda x: f"${x:,.0f}")

@@ -182,6 +182,7 @@ with tab1:
     )
 
     st.subheader("📋 Resumen por Canal")
+    st.caption("Tabla de ventas agrupada por Canal de Ventas. Columnas: **Ventas Netas ($)** = valor facturado sin IVA · **Costo ($)** = costo de los productos · **Rentabilidad ($)** = Ventas − Costo · **% Rent.** = Rentabilidad / Ventas (semáforo: 🟢 ≥35% 🟡 20–35% 🔴 <20%) · **% Costo** = Costo / Ventas · **% Part.** = participación de ese canal sobre el total.")
     st.dataframe(styled_c,
                  column_config={
                      "% Rent.":  st.column_config.NumberColumn("% Rent.",  help="Rentabilidad como porcentaje de las ventas netas"),
@@ -199,6 +200,7 @@ with tab1:
 
     with g1:
         st.subheader("💰 Ventas Netas por Canal")
+        st.caption("Barras horizontales ordenadas de mayor a menor. Muestra cuánto vendió en pesos cada canal en el período seleccionado.")
 
         def _fmt_bar(v):
             if abs(v) >= 1_000_000_000: return f"${v/1e9:.2f}mm"   # miles de millones
@@ -243,6 +245,7 @@ with tab1:
 
     with g2:
         st.subheader("📊 % Rentabilidad por Canal")
+        st.caption("Muestra el margen de ganancia de cada canal. 🔴 Rojo = menos del 20% (crítico) · 🟡 Naranja = 20–35% (aceptable) · 🟢 Verde = más del 35% (meta). Las líneas punteadas marcan los umbrales de referencia.")
         colores = [
             "#ef4444" if x < 0.2 else
             "#f59e0b" if x < 0.35 else
@@ -483,6 +486,7 @@ with tab3:
             "% Part.":          "{:.2%}",
         }
         st.subheader("📋 Resumen por Familia de Producto")
+        st.caption("Ventas consolidadas por línea de producto (Familia). Permite identificar qué categorías generan más ventas y cuáles tienen mejor margen.")
         st.dataframe(
             display_f.style.format(fmt_f)
                            .apply(color_total_f, axis=1)
@@ -503,6 +507,7 @@ with tab3:
                              title="Participación por Familia",
                              color_discrete_sequence=px.colors.qualitative.Set3)
             fig_pie.update_layout(height=400)
+            st.caption("Muestra qué porcentaje del total de ventas aporta cada familia de producto. Las familias más grandes en el gráfico son las más relevantes.")
             st.plotly_chart(fig_pie, use_container_width=True)
         with g2f:
             fig_bar_f = px.bar(
@@ -514,6 +519,7 @@ with tab3:
             )
             fig_bar_f.update_layout(showlegend=False, coloraxis_showscale=False,
                                     plot_bgcolor="white", height=400)
+            st.caption("Ventas en pesos por familia, ordenadas de mayor a menor. Útil para comparar el tamaño absoluto de cada línea de producto.")
             st.plotly_chart(fig_bar_f, use_container_width=True)
 
         st.download_button("📥 Descargar CSV",
